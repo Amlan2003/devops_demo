@@ -3,57 +3,67 @@ name: Test and Build
 on:
   push:
     branches:
-    - main
+      - main
     paths:
-    - '**/*'
+      - '**/*'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    #Setting up environment
-    - name: Checkout code
-      uses: actions/checkout@v2
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Docker Setup
-      uses: docker/setup-buildx-action@v2
+      # Set up Docker Buildx
+      - name: Docker Setup
+        uses: docker/setup-buildx-action@v2
 
-    - name: Docker Credentials
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      # Login to Docker Hub
+      - name: Docker Credentials
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Docker tag
-      id: version
-      run: |
-        VERSION=v$(date +"%Y%m%d%H%M%S")
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
+      # Generate image version tag
+      - name: Docker tag
+        run: |
+          VERSION=v$(date +"%Y%m%d%H%M%S")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    # Build the Docker Image
-    - name: Build Docker Image
-      run: |
-        docker build -t amlan2003/devops_demo:${{ env.VERSION }} .
+      # Build the Docker image
+      - name: Build Docker Image
+        run: |
+          docker build -t amlan2003/devops_demo:${{ env.VERSION }} .
 
-    # Push the Docker Image
-    - name: Push Docker Image
-      run: |
-        docker push amlan2003/devops_demo:${{ env.VERSION }}
+      # Push the Docker image
+      - name: Push Docker Image
+        run: |
+          docker push amlan2003/devops_demo:${{ env.VERSION }}
 
-    # UPdate the K8s Manifest Files
-    - name: Update K8s Manifests
-      run: |
-        cat deploy/deployment.yaml
-        sed -i "s|image: amlan2003/devops_demo:.*|image: amlan2003/devops_demo:${{ env.VERSION }}|g" deploy/deployment.yaml
-        cat deploy/deployment.yaml
+      # Update K8s manifests with new image tag
+      - name: Update K8s Manifests
+        run: |
+          echo "Before update:"
+          cat deploy/deployment.yaml
+          sed -i "s|image: amlan2003/devops_demo:.*|image: amlan2003/devops_demo:${{ env.VERSION }}|g" deploy/deployment.yaml
+          echo "After update:"
+          cat deploy/deployment.yaml
 
-    # Update Github
-    - name: Commit the changes
-      run: |
-        git config --global user.email "<>"
-        git config --global user.name "GitHub Actions Bot"
-        git checkout main
-        git add deploy/deployment.yaml
-        git commit -m "Update deploy.yaml with new image version - ${{ env.VERSION }}"
-        git push origin main
+      # Commit the updated deployment.yaml
+      - name: Commit the changes
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions Bot"
+          git checkout main
+          git add deploy/deployment.yaml
+          
+          # Check for actual changes before committing
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update deploy.yaml with new image version - ${{ env.VERSION }}"
+            git push origin main
+          fi
